@@ -8,7 +8,7 @@ const express = require("express");
 const app = express();
 app.use(
   cors({
-    origin: "https://voosh-frontend-one.vercel.app/", // Replace with your Vercel domain
+    origin: "https://voosh-frontend-one.vercel.app", // Replace with your Vercel domain
   })
 );
 app.use(bodyParser.json());
