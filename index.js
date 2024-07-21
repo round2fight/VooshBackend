@@ -379,6 +379,8 @@ app.put("/task/:taskUUID", authenticateJWT, async (req, res) => {
           "At least one field (title, description, dueDate, status) is required to update",
       });
     }
+    const sstatus = Number(status);
+    console.log(status, typeof status, sstatus, typeof sstatus);
 
     // Find the user by UUID
     const task = await db.Task.findOne({
@@ -390,7 +392,10 @@ app.put("/task/:taskUUID", authenticateJWT, async (req, res) => {
     }
 
     // Validate status
-    if (status !== undefined && !Object.values(TASK_STATUS).includes(status)) {
+    if (
+      sstatus !== undefined &&
+      !Object.values(TASK_STATUS).includes(sstatus)
+    ) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
@@ -398,7 +403,7 @@ app.put("/task/:taskUUID", authenticateJWT, async (req, res) => {
     if (title) task.title = title;
     if (description) task.description = description;
     if (dueDate) task.dueDate = dueDate;
-    if (status) task.status = status;
+    if (sstatus !== null) task.status = sstatus;
 
     // Save the updated task
     await task.save();
