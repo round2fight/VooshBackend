@@ -19,11 +19,13 @@ module.exports = {
     dialect: "postgres",
   },
   production: {
-    username: "voosh_database_user",
-    password: "8vNMKgI82W6pWP0L6yyCpUE3QNPnVwlp",
-    database: "voosh_database",
-    host: "postgresql://voosh_database_user:8vNMKgI82W6pWP0L6yyCpUE3QNPnVwlp@dpg-cqekdppu0jms739e4cag-a/voosh_database", //"127.0.0.1",
-    port: "5432",
+    url: process.env.DATABASE_URL, // Your connection URL here
     dialect: "postgres",
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false, // Set to true for stricter SSL checks
+      },
+    },
   },
 };
