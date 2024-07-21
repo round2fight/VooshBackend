@@ -2,7 +2,7 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const bodyParser = require("body-parser");
-
+const axios = require("axios");
 const cors = require("cors");
 const express = require("express");
 const app = express();
@@ -16,24 +16,42 @@ const db = require("./models"); // Adjust the path as needed
 const JWT_SECRET = "your_jwt_secret_key";
 
 // Register endpoint
-app.post("/sign-up", async (req, res) => {
-  const { name, email, username, password } = req.body;
+app.post("/signup/email", async (req, res) => {
+  const { firstName, lastName, email, password } = req.body;
   const status = 0;
 
-  if (!name || !email || !username || !password) {
+  if (!firstName || !lastName || !email || !password) {
     return res.status(400).send("Name, username, and password are required");
   }
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
     const user = await db.User.create({
-      name: name,
+      name: firstName,
+      firstname: firstName,
       email: email,
-      username: username,
+      lastname: lastName,
       password: hashedPassword,
+      type: 0,
       // uuid: Sequelize.UUIDV4(),
     });
-    res.status(201).send("User registered");
+    if (user) {
+      const token = jwt.sign(
+        {
+          uuid: user.uuid,
+          firstName: user.firstName,
+          name: user.firstName,
+          email: user.email,
+          type: user.type,
+          username: user.username,
+        },
+        JWT_SECRET,
+        { expiresIn: "5h" }
+      );
+      res.status(200).json({ token: token, uuid: user.uuid });
+    } else {
+      res.status(401).send("User creation failed");
+    }
   } catch (error) {
     console.log(error);
     res.status(400).send("Error registering user");
@@ -46,15 +64,22 @@ app.post("/signin/email", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await db.User.findOne({ where: { email } });
+    const user = await db.User.findOne({ where: { email: email, type: 0 } });
 
     if (user && (await bcrypt.compare(password, user.password))) {
       const token = jwt.sign(
-        { uuid: user.uuid, name: user.name, username: user.username },
+        {
+          uuid: user.uuid,
+          firstName: user.firstName,
+          name: user.firstName,
+          email: user.email,
+          type: user.type,
+          username: user.username,
+        },
         JWT_SECRET,
         { expiresIn: "5h" }
       );
-      res.json({ token: token, username: user.username });
+      res.json({ token: token, uuid: user.uuid });
     } else {
       res.status(401).send("Invalid credentials");
     }
@@ -63,6 +88,139 @@ app.post("/signin/email", async (req, res) => {
   }
 });
 
+// Login endpoint
+app.post("/signin/google", async (req, res) => {
+  const { googleToken } = req.body;
+
+  try {
+    // Fetch user info from Google
+    const response = await axios.get(
+      "https://www.googleapis.com/oauth2/v1/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${googleToken}`,
+          Accept: "application/json",
+        },
+      }
+    );
+    console.log("google", response);
+
+    if (response.status === 200) {
+      const email = response.data.email;
+
+      // Find user in the database
+      const user = await db.User.findOne({ where: { email: email, type: 1 } });
+
+      if (user) {
+        const token = jwt.sign(
+          {
+            uuid: user.uuid,
+            firstName: user.firstName,
+            name: user.firstName,
+            email: user.email,
+            type: user.type,
+            username: user.username,
+          },
+          JWT_SECRET,
+          { expiresIn: "5h" }
+        );
+        res.json({ token: token, uuid: user.uuid });
+      } else {
+        res.status(401).send("User not found");
+      }
+    } else {
+      console.error(`Google requests error -> ${response}`);
+      res.status(response.status).json({
+        success: false,
+        message: "Failed to fetch user info from Google",
+      });
+    }
+  } catch (error) {
+    console.error(`Google requests error -> ${error}`);
+    res.status(500).send("Error signing in");
+  }
+});
+
+app.post("/signup/google", async (req, res) => {
+  const { googleToken } = req.body;
+
+  try {
+    // Fetch user info from Google
+    const response = await axios.get(
+      "https://www.googleapis.com/oauth2/v1/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${googleToken}`,
+          Accept: "application/json",
+        },
+      }
+    );
+    console.log("google", response.data);
+
+    if (response.status === 200) {
+      const email = response.data.email;
+      const firstName = response.data.given_name;
+      const lastName = response.data.family_name;
+      const type = 1;
+
+      console.log(
+        response.data.email,
+        response.data.given_name,
+        response.data.family_name
+      );
+
+      // Find user in the database
+      const existingUser = await db.User.findOne({
+        where: { email: email, type: 1 },
+      });
+
+      if (existingUser) {
+        res.status(401).send("User already exists");
+      } else {
+        try {
+          const user = await db.User.create({
+            name: firstName,
+            email: email,
+            firstname: firstName,
+            lastname: lastName,
+            type: type,
+            // uuid: Sequelize.UUIDV4(),
+          });
+
+          if (user) {
+            const token = jwt.sign(
+              {
+                uuid: user.uuid,
+                firstName: user.firstName,
+                name: user.firstName,
+                email: user.email,
+                type: user.type,
+                username: user.username,
+              },
+              JWT_SECRET,
+              { expiresIn: "5h" }
+            );
+            res.status(200).json({ token: token, uuid: user.uuid });
+          } else {
+            res.status(401).send("User not foundd");
+          }
+        } catch (error) {
+          console.log(error);
+          res.status(400).send("Error registering user");
+        }
+      }
+    } else {
+      console.error(`Google requests error -> ${response}`);
+      res.status(response.status).json({
+        success: false,
+        message: "Failed to fetch user info from Google",
+      });
+    }
+  } catch (error) {
+    console.error(`Google requests error -> ${error}`);
+    res.status(500).send("Error signing in");
+  }
+});
 // Middleware to protect routes
 const authenticateJWT = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -160,12 +318,13 @@ app.get("/task/:taskUUID", authenticateJWT, async (req, res) => {
 });
 
 // Create Task
-app.post("/task/:userUUID", authenticateJWT, async (req, res) => {
+app.post("/task", authenticateJWT, async (req, res) => {
   try {
     // Extract userUUID from request parameters
-    const { userUUID } = req.params;
 
     const { title, description, dueDate, status } = req.body;
+
+    const sstatus = Number(status);
 
     // Validate input
     if (!title) {
@@ -173,21 +332,20 @@ app.post("/task/:userUUID", authenticateJWT, async (req, res) => {
     }
 
     // Validate status
-    if (status !== undefined && !Object.values(TASK_STATUS).includes(status)) {
+    if (
+      sstatus !== undefined &&
+      !Object.values(TASK_STATUS).includes(sstatus)
+    ) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
     // Find the user by UUID
     const user = await db.User.findOne({
-      where: { uuid: userUUID }, // Assuming UUID is stored in the 'uuid' column
+      where: { uuid: req.user.uuid }, // Assuming UUID is stored in the 'uuid' column
     });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
-    }
-
-    if (req.user.uuid !== userUUID) {
-      return res.status(404).json({ message: "Insufficient rights" });
     }
 
     // Create the task
@@ -195,12 +353,12 @@ app.post("/task/:userUUID", authenticateJWT, async (req, res) => {
       title,
       description,
       dueDate,
-      status,
+      status: sstatus,
       user_id: user.id, // Associate the task with the user
     });
 
     // Send the tasks as a response
-    res.status(201).json(task);
+    res.status(200).json(task);
   } catch (error) {
     console.error("Error fetching tasks:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -257,6 +415,8 @@ app.put("/task/:taskUUID", authenticateJWT, async (req, res) => {
 app.delete("/task/:taskUUID", authenticateJWT, async (req, res) => {
   try {
     const { taskUUID } = req.params;
+
+    console.log("taskUUID", taskUUID);
 
     // Find the task by UUID
     const task = await db.Task.findOne({
