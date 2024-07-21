@@ -60,12 +60,12 @@ app.post("/signup/email", async (req, res) => {
 
 // Login endpoint
 app.post("/signin/email", async (req, res) => {
-  console.log("hit");
   const { email, password } = req.body;
 
   try {
+    console.log("Entered USer route");
     const user = await db.User.findOne({ where: { email: email, type: 0 } });
-
+    console.log("Entered ann database queried");
     if (user && (await bcrypt.compare(password, user.password))) {
       const token = jwt.sign(
         {
