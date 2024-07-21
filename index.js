@@ -6,7 +6,11 @@ const axios = require("axios");
 const cors = require("cors");
 const express = require("express");
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://voosh-frontend-one.vercel.app/", // Replace with your Vercel domain
+  })
+);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
